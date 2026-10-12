@@ -89,12 +89,14 @@ iterate on the report without re-downloading or re-transforming anything.
 │   ├── model.py                 [5] trains + calibrates the risk model
 │   ├── features.py                  which columns the model may see, and when
 │   ├── report.py                [6] charts + HTML/Markdown assembly
+│   ├── app.py                       builds the browser scoring app
+│   ├── templates/risk_app.html      its page template
 │   ├── viz.py                   chart palette, themes and styling
 │   ├── validate.py              the expectations engine
 │   └── pipeline.py              orchestration + the expectation suites
 ├── predict.py                   score a booking from the command line
 ├── sql/                         15 analysis queries, one per file
-├── tests/                       64 tests, offline, ~11s
+├── tests/                       66 tests, offline, ~11s
 └── data/  reports/  logs/       artifacts (git-ignored)
 ```
 
@@ -321,6 +323,28 @@ SELECT risk_band, COUNT(*), ROUND(AVG(is_canceled) * 100, 1) AS actual_pct
 FROM v_booking_risk GROUP BY risk_band;
 ```
 
+### The browser scoring app
+
+Training also builds `reports/risk_app.html` — a self-contained page that scores
+a booking as you type, with no server and no Python.
+
+That works because the selected model is a logistic regression, which is only a
+scaler, a one-hot table and a dot product. `export_for_web()` writes it out as
+8KB of JSON and the page runs the real model client-side. The export is not
+taken on trust: it re-scores 400 real bookings using only the exported numbers
+and **refuses to write the file** if it disagrees with scikit-learn by more than
+1e-9 (observed drift: 2.2e-16). The page is rebuilt from the template on every
+training run, so the app and the model cannot drift apart.
+
+Because it is linear, the page can also show *why* — each input's actual push on
+the log-odds, which is the true decomposition rather than a feature-importance
+proxy.
+
+```bash
+python run_pipeline.py --stage model     # trains, exports, builds the app
+start reports/risk_app.html              # macOS/Linux: open
+```
+
 ## Adding an analysis
 
 Drop a `.sql` file into `sql/`. It is picked up automatically, exported to
@@ -345,7 +369,7 @@ python -m unittest discover -s tests -v     # no install needed
 pytest tests -v                             # if pytest is available
 ```
 
-64 tests, fully offline — each builds a small frame with every quirk of the real
+66 tests, fully offline — each builds a small frame with every quirk of the real
 source baked in. They pin the *cleaning decisions* and the *leakage rules*, which
 are the two parts of a pipeline that silently drift.
 
