@@ -1,0 +1,777 @@
+<title>Booking Risk Scorer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap">
+<style>
+:root {
+  color-scheme: light;
+  --ground: #fbfaf8;
+  --surface: #ffffff;
+  --sunk: #f4f2ee;
+  --ink: #16181d;
+  --ink-2: #4e5360;
+  --ink-3: #82868f;
+  --rule: #e4e1da;
+  --rule-strong: #d2cec4;
+  --accent: #2a78d6;
+  --accent-soft: #e8f0fc;
+  --up: #c4521f;          /* raises risk */
+  --down: #2a78d6;        /* lowers risk  */
+  --band-low: #1a7f5a;
+  --band-moderate: #8a6d1f;
+  --band-elevated: #b35a1f;
+  --band-high: #b0332e;
+  --band-tint: #f2f0ec;
+  --shadow: 0 1px 2px rgba(20,22,28,.05), 0 8px 24px -14px rgba(20,22,28,.18);
+  --display: "Newsreader", Georgia, serif;
+  --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ground: #141518; --surface: #1c1e22; --sunk: #232529;
+    --ink: #f2f1ee; --ink-2: #b4b3ac; --ink-3: #85847e;
+    --rule: #2e3036; --rule-strong: #3d4047;
+    --accent: #3987e5; --accent-soft: #16243a;
+    --up: #e6855c; --down: #3987e5;
+    --band-low: #43b88c; --band-moderate: #d0a73e;
+    --band-elevated: #e6855c; --band-high: #e86f68;
+    --band-tint: #26282d;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -14px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground: #141518; --surface: #1c1e22; --sunk: #232529;
+  --ink: #f2f1ee; --ink-2: #b4b3ac; --ink-3: #85847e;
+  --rule: #2e3036; --rule-strong: #3d4047;
+  --accent: #3987e5; --accent-soft: #16243a;
+  --up: #e6855c; --down: #3987e5;
+  --band-low: #43b88c; --band-moderate: #d0a73e;
+  --band-elevated: #e6855c; --band-high: #e86f68;
+  --band-tint: #26282d;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -14px rgba(0,0,0,.7);
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--ground); color: var(--ink);
+  font-family: var(--body); font-size: 15px; line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1180px; margin: 0 auto; padding-inline: 20px; padding-block: 0 64px; }
+
+header { padding-block: 40px 26px; border-bottom: 1px solid var(--rule-strong); }
+.eyebrow {
+  font-family: var(--mono); font-size: 11px; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--ink-3); margin: 0 0 12px;
+}
+h1 {
+  font-family: var(--display); font-weight: 500;
+  font-size: clamp(30px, 4.6vw, 44px); line-height: 1.1;
+  letter-spacing: -.02em; margin: 0 0 12px; text-wrap: balance;
+}
+.lede { color: var(--ink-2); max-width: 64ch; margin: 0; }
+
+/* --- Presets --- */
+.presets { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
+.preset {
+  font: inherit; font-size: 13px; cursor: pointer;
+  background: var(--surface); color: var(--ink-2);
+  border: 1px solid var(--rule-strong); border-radius: 999px;
+  padding: 6px 14px;
+}
+.preset:hover { border-color: var(--accent); color: var(--accent); }
+.preset[aria-pressed="true"] {
+  background: var(--accent-soft); border-color: var(--accent); color: var(--accent);
+  font-weight: 500;
+}
+
+/* --- Layout --- */
+.grid { display: grid; gap: 28px; margin-top: 30px; align-items: start; }
+@media (min-width: 940px) {
+  .grid { grid-template-columns: minmax(0,1fr) 384px; gap: 36px; }
+  .result { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 20px); }
+}
+
+/* --- Controls --- */
+fieldset {
+  border: 1px solid var(--rule); border-radius: 10px;
+  background: var(--surface); padding: 18px 20px 20px; margin: 0 0 18px;
+  box-shadow: var(--shadow);
+}
+legend {
+  font-family: var(--mono); font-size: 11px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--ink-3); padding: 0 8px; margin-left: -8px;
+}
+.fields { display: grid; gap: 16px 18px; grid-template-columns: repeat(auto-fit, minmax(156px, 1fr)); }
+.field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.field.wide { grid-column: 1 / -1; }
+label { font-size: 12.5px; color: var(--ink-2); font-weight: 500; }
+label .hint { color: var(--ink-3); font-weight: 400; }
+select, input[type="number"], input[type="date"] {
+  font: inherit; font-size: 14px; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--rule-strong);
+  border-radius: 7px; padding: 7px 9px; width: 100%; min-width: 0;
+}
+select:focus-visible, input:focus-visible, .preset:focus-visible,
+button:focus-visible, summary:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+.slider-row { display: flex; align-items: center; gap: 12px; }
+input[type="range"] { flex: 1; min-width: 0; accent-color: var(--accent); }
+.slider-value {
+  font-family: var(--mono); font-size: 13px; font-variant-numeric: tabular-nums;
+  min-width: 62px; text-align: right; color: var(--ink);
+}
+.check { display: flex; align-items: center; gap: 9px; font-size: 13.5px; color: var(--ink-2); }
+.check input { accent-color: var(--accent); width: 16px; height: 16px; }
+
+/* --- Result panel --- */
+.result-card {
+  background: var(--surface); border: 1px solid var(--rule);
+  border-radius: 12px; padding: 24px; box-shadow: var(--shadow);
+}
+.result-label {
+  font-family: var(--mono); font-size: 11px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--ink-3); margin: 0 0 6px;
+}
+.figure {
+  font-family: var(--display); font-size: 64px; line-height: 1;
+  font-weight: 500; letter-spacing: -.03em; font-variant-numeric: tabular-nums;
+  margin: 0; display: flex; align-items: baseline; gap: 4px;
+}
+.figure .pct { font-size: 30px; color: var(--ink-2); }
+.band {
+  display: inline-flex; align-items: center; gap: 7px; margin-top: 12px;
+  font-size: 13px; font-weight: 600; padding: 4px 12px 4px 10px;
+  border-radius: 999px; background: var(--band-tint); color: var(--band-color);
+  border: 1px solid currentColor;
+}
+.band::before {
+  content: ""; width: 8px; height: 8px; border-radius: 50%;
+  background: currentColor; flex: none;
+}
+.meter { margin-top: 18px; }
+.meter-track {
+  position: relative; height: 10px; border-radius: 999px;
+  background: var(--sunk); overflow: visible;
+}
+.meter-fill {
+  height: 100%; border-radius: 999px; background: var(--band-color);
+  transition: width .18s ease;
+}
+@media (prefers-reduced-motion: reduce) { .meter-fill { transition: none; } }
+.meter-base {
+  position: absolute; top: -4px; bottom: -4px; width: 2px;
+  background: var(--ink-3); border-radius: 1px;
+}
+.meter-scale {
+  display: flex; justify-content: space-between; margin-top: 7px;
+  font-family: var(--mono); font-size: 10.5px; color: var(--ink-3);
+}
+.compare {
+  margin: 18px 0 0; padding-top: 16px; border-top: 1px solid var(--rule);
+  font-size: 13.5px; color: var(--ink-2);
+}
+.compare b { color: var(--ink); font-weight: 600; }
+
+/* --- Contributions --- */
+.contrib { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--rule); }
+.contrib h2 {
+  font-family: var(--mono); font-size: 11px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--ink-3); margin: 0 0 4px; font-weight: 500;
+}
+.contrib .note { font-size: 12px; color: var(--ink-3); margin: 0 0 14px; }
+.bars { display: grid; gap: 7px; }
+.bar-row { display: grid; grid-template-columns: 1fr 86px; align-items: center; gap: 10px; }
+.bar-name { font-size: 12.5px; color: var(--ink-2); overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.bar-name span { color: var(--ink); }
+.bar-track { position: relative; height: 16px; }
+.bar-axis { position: absolute; left: 50%; top: -1px; bottom: -1px; width: 1px;
+  background: var(--rule-strong); }
+.bar-fill { position: absolute; top: 3px; height: 10px; border-radius: 2px; }
+.bar-fill.up { background: var(--up); left: 50%; }
+.bar-fill.down { background: var(--down); right: 50%; }
+
+/* --- Derived + notes --- */
+.derived { margin-top: 18px; }
+summary {
+  cursor: pointer; font-family: var(--mono); font-size: 11px;
+  letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3);
+  list-style: none; display: inline-flex; align-items: center; gap: 7px; padding: 4px 0;
+}
+summary::-webkit-details-marker { display: none; }
+summary::before { content: "+"; font-size: 13px; }
+details[open] summary::before { content: "\2212"; }
+summary:hover { color: var(--accent); }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px;
+  margin: 10px 0 0; font-size: 12.5px; }
+.kv dt { color: var(--ink-3); }
+.kv dd { margin: 0; font-family: var(--mono); font-variant-numeric: tabular-nums;
+  color: var(--ink-2); }
+
+.caveat {
+  margin-top: 24px; padding: 16px 18px; background: var(--sunk);
+  border-left: 2px solid var(--up); border-radius: 0 8px 8px 0;
+  font-size: 13px; color: var(--ink-2);
+}
+.caveat strong { color: var(--ink); display: block; margin-bottom: 3px; }
+.caveat + .caveat { margin-top: 12px; }
+
+footer {
+  margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--rule);
+  font-family: var(--mono); font-size: 11.5px; color: var(--ink-3);
+  display: flex; flex-wrap: wrap; gap: 6px 22px;
+}
+</style>
+
+<script type="application/json" id="model">__MODEL_JSON__</script>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Hotel booking demand &middot; logistic model</p>
+    <h1>Will this booking be cancelled?</h1>
+    <p class="lede">Describe a booking and the model scores it live. This is the
+      same logistic regression the pipeline trains and selects, exported
+      coefficient-for-coefficient &mdash; it runs in your browser and matches
+      scikit-learn to floating-point precision.</p>
+    <div class="presets" id="presets" role="group" aria-label="Example bookings"></div>
+  </header>
+
+  <div class="grid">
+    <form id="form" autocomplete="off">
+      <fieldset>
+        <legend>Booking</legend>
+        <div class="fields">
+          <div class="field wide">
+            <label for="lead_time">Lead time <span class="hint">&mdash; days between booking and arrival</span></label>
+            <div class="slider-row">
+              <input type="range" id="lead_time" min="0" max="500" step="1">
+              <output class="slider-value" id="lead_time_out" for="lead_time"></output>
+            </div>
+          </div>
+          <div class="field">
+            <label for="deposit_type">Deposit policy</label>
+            <select id="deposit_type"></select>
+          </div>
+          <div class="field">
+            <label for="market_segment">Market segment</label>
+            <select id="market_segment"></select>
+          </div>
+          <div class="field">
+            <label for="distribution_channel">Distribution channel</label>
+            <select id="distribution_channel"></select>
+          </div>
+          <div class="field">
+            <label for="customer_type">Customer type</label>
+            <select id="customer_type"></select>
+          </div>
+          <div class="field wide">
+            <div class="check">
+              <input type="checkbox" id="has_agent">
+              <label for="has_agent">Booked through a travel agent</label>
+            </div>
+          </div>
+          <div class="field wide">
+            <div class="check">
+              <input type="checkbox" id="has_company">
+              <label for="has_company">Tied to a corporate account</label>
+            </div>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Stay</legend>
+        <div class="fields">
+          <div class="field">
+            <label for="hotel">Property</label>
+            <select id="hotel"></select>
+          </div>
+          <div class="field">
+            <label for="arrival_date">Arrival date</label>
+            <input type="date" id="arrival_date">
+          </div>
+          <div class="field">
+            <label for="nights">Nights <span class="hint">&mdash; split by calendar</span></label>
+            <input type="number" id="nights" min="0" max="30" step="1">
+          </div>
+          <div class="field">
+            <label for="adr">Nightly rate <span class="hint">&mdash; EUR</span></label>
+            <input type="number" id="adr" min="0" max="1000" step="5">
+          </div>
+          <div class="field">
+            <label for="reserved_room_type">Room type</label>
+            <select id="reserved_room_type"></select>
+          </div>
+          <div class="field">
+            <label for="meal">Meal plan</label>
+            <select id="meal"></select>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Guests</legend>
+        <div class="fields">
+          <div class="field">
+            <label for="adults">Adults</label>
+            <input type="number" id="adults" min="1" max="10" step="1">
+          </div>
+          <div class="field">
+            <label for="children">Children</label>
+            <input type="number" id="children" min="0" max="10" step="1">
+          </div>
+          <div class="field">
+            <label for="babies">Babies</label>
+            <input type="number" id="babies" min="0" max="10" step="1">
+          </div>
+          <div class="field wide">
+            <label for="country">Country of origin</label>
+            <select id="country"></select>
+          </div>
+          <div class="field wide">
+            <div class="check">
+              <input type="checkbox" id="is_repeated_guest">
+              <label for="is_repeated_guest">Returning guest</label>
+            </div>
+          </div>
+          <div class="field">
+            <label for="previous_cancellations">Prior cancellations</label>
+            <input type="number" id="previous_cancellations" min="0" max="30" step="1">
+          </div>
+          <div class="field">
+            <label for="previous_bookings_not_canceled">Prior completed stays</label>
+            <input type="number" id="previous_bookings_not_canceled" min="0" max="80" step="1">
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Requests</legend>
+        <div class="fields">
+          <div class="field">
+            <label for="total_of_special_requests">Special requests</label>
+            <input type="number" id="total_of_special_requests" min="0" max="5" step="1">
+          </div>
+        </div>
+      </fieldset>
+    </form>
+
+    <aside class="result">
+      <div class="result-card">
+        <p class="result-label">Chance of cancellation</p>
+        <p class="figure"><span id="value">—</span><span class="pct">%</span></p>
+        <span class="band" id="band">—</span>
+
+        <div class="meter">
+          <div class="meter-track">
+            <div class="meter-fill" id="fill" style="width:0%"></div>
+            <div class="meter-base" id="basemark" title="period base rate"></div>
+          </div>
+          <div class="meter-scale"><span>0%</span><span>50%</span><span>100%</span></div>
+        </div>
+
+        <p class="compare" id="compare"></p>
+
+        <div class="contrib">
+          <h2>What is driving it</h2>
+          <p class="note">Each input&rsquo;s push on the log-odds. Left lowers
+            risk, right raises it; a value sitting at the training average
+            contributes nothing.</p>
+          <div class="bars" id="bars"></div>
+        </div>
+
+        <div class="derived">
+          <details>
+            <summary>What the model receives</summary>
+            <dl class="kv" id="derived"></dl>
+          </details>
+        </div>
+      </div>
+
+      <div class="caveat">
+        <strong>It under-predicts by about <span id="gap">5</span>&nbsp;points.</strong>
+        On held-out 2017 arrivals the model averaged
+        <span id="meanpred">33.6</span>% against an actual
+        <span id="testbase">38.7</span>%. Cancellation rose between the training
+        and test periods. Treat the <em>ranking</em> as reliable and add a
+        correction before using an absolute number for overbooking.
+      </div>
+      <div class="caveat">
+        <strong>Fields you don&rsquo;t touch aren&rsquo;t neutral.</strong>
+        Untouched inputs hold the dataset&rsquo;s most common values, which
+        describe a genuinely high-risk booking: Portuguese, Online TA, 90 days
+        ahead. That is why the opening score is high.
+      </div>
+    </aside>
+  </div>
+
+  <footer>
+    <span id="meta-trained"></span>
+    <span id="meta-perf"></span>
+    <span>Hotel Booking Demand &mdash; Antonio, Almeida &amp; Nunes (2019)</span>
+  </footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var M = JSON.parse(document.getElementById("model").textContent);
+  var NUM = M.numeric, CAT = M.categorical, D = M.defaults;
+
+  var MONTHS = ["January","February","March","April","May","June","July",
+                "August","September","October","November","December"];
+  var DAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  var SEASON = {12:"Winter",1:"Winter",2:"Winter",3:"Spring",4:"Spring",5:"Spring",
+                6:"Summer",7:"Summer",8:"Summer",9:"Autumn",10:"Autumn",11:"Autumn"};
+
+  // Pretty names for the contribution list. Anything unlisted falls back to
+  // the raw column name with underscores removed.
+  var LABEL = {
+    lead_time: "Lead time", deposit_type: "Deposit policy",
+    country: "Country", market_segment: "Market segment",
+    distribution_channel: "Channel", customer_type: "Customer type",
+    reserved_room_type: "Room type", meal: "Meal plan", hotel: "Property",
+    adr: "Nightly rate", booking_value: "Booking value",
+    total_nights: "Total nights", total_guests: "Total guests",
+    adults: "Adults", children: "Children", babies: "Babies",
+    stays_in_weekend_nights: "Weekend nights",
+    stays_in_week_nights: "Weekday nights",
+    total_of_special_requests: "Special requests",
+    previous_cancellations: "Prior cancellations",
+    previous_bookings_not_canceled: "Prior stays",
+    is_repeated_guest: "Returning guest", season: "Season",
+    arrival_month_num: "Arrival month", arrival_dow: "Arrival weekday",
+    arrival_date_week_number: "Week of year", party_type: "Party type",
+    stay_type: "Stay pattern", has_agent: "Travel agent",
+    has_company: "Corporate account"
+  };
+  function label(k) { return LABEL[k] || k.replace(/_/g, " "); }
+
+  // --- Build the controls from the model's own vocabulary ----------------
+  function fill(id, levels, order, selected) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    var seen = {};
+    (order || []).concat(Object.keys(levels)).forEach(function (v) {
+      if (seen[v]) return;
+      seen[v] = 1;
+      var o = document.createElement("option");
+      o.value = v; o.textContent = v;
+      el.appendChild(o);
+    });
+    if (CAT[id] && CAT[id].infrequent !== null) {
+      var other = document.createElement("option");
+      other.value = "__infrequent__";
+      other.textContent = "Other / not listed";
+      el.appendChild(other);
+    }
+    el.value = selected;
+    if (el.selectedIndex < 0) el.selectedIndex = 0;
+  }
+
+  ["hotel","meal","country","market_segment","distribution_channel",
+   "reserved_room_type","deposit_type","customer_type"].forEach(function (c) {
+    fill(c, CAT[c].levels, CAT[c].order, String(D[c]));
+  });
+
+  // Numbers and dates. The arrival date drives month, weekday, ISO week and
+  // the weekday/weekend night split, so the user never types those directly.
+  function isoWeek(d) {
+    var t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    t.setUTCDate(t.getUTCDate() + 4 - (t.getUTCDay() || 7));
+    var start = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+    return Math.ceil(((t - start) / 86400000 + 1) / 7);
+  }
+  function defaultArrival() {
+    // The dataset's modal arrival month, on a Friday, in a non-leap year.
+    var d = new Date(2017, D.arrival_month - 1, 15);
+    while (DAYS[d.getDay()] !== D.arrival_dow) d.setDate(d.getDate() + 1);
+    return d;
+  }
+  function toInput(d) {
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") +
+           "-" + String(d.getDate()).padStart(2, "0");
+  }
+
+  var el = {};
+  ["lead_time","arrival_date","nights","adr","adults","children","babies",
+   "total_of_special_requests",
+   "previous_cancellations","previous_bookings_not_canceled",
+   "is_repeated_guest","has_agent","has_company"].forEach(function (id) {
+    el[id] = document.getElementById(id);
+  });
+
+  function setDefaults() {
+    el.lead_time.value = D.lead_time;
+    el.arrival_date.value = toInput(defaultArrival());
+    el.nights.value = D.weekend_nights + D.week_nights;
+    el.adr.value = D.adr;
+    el.adults.value = D.adults;
+    el.children.value = D.children;
+    el.babies.value = D.babies;
+    el.total_of_special_requests.value = D.special_requests;
+    el.previous_cancellations.value = D.previous_cancellations;
+    el.previous_bookings_not_canceled.value = D.previous_bookings_not_canceled;
+    el.is_repeated_guest.checked = !!D.is_repeated_guest;
+    el.has_agent.checked = !!D.has_agent;
+    el.has_company.checked = !!D.has_company;
+    ["hotel","meal","country","market_segment","distribution_channel",
+     "reserved_room_type","deposit_type","customer_type"].forEach(function (c) {
+      document.getElementById(c).value = String(D[c]);
+    });
+  }
+
+  // --- Turn the form into the model's feature row ------------------------
+  function num(id, fallback) {
+    var v = parseFloat(el[id].value);
+    return isFinite(v) ? v : fallback;
+  }
+
+  function readForm() {
+    var parts = (el.arrival_date.value || "").split("-");
+    var arrival = parts.length === 3
+      ? new Date(+parts[0], +parts[1] - 1, +parts[2])
+      : defaultArrival();
+    if (isNaN(arrival)) arrival = defaultArrival();
+
+    var nights = Math.max(0, Math.round(num("nights", 3)));
+    // Split the stay by the real calendar rather than asking for it.
+    var weekend = 0;
+    for (var i = 0; i < nights; i++) {
+      var d = new Date(arrival.getFullYear(), arrival.getMonth(),
+                       arrival.getDate() + i);
+      if (d.getDay() === 0 || d.getDay() === 6) weekend++;
+    }
+    var week = nights - weekend;
+
+    var adults = Math.max(0, Math.round(num("adults", 2)));
+    var children = Math.max(0, Math.round(num("children", 0)));
+    var babies = Math.max(0, Math.round(num("babies", 0)));
+    var guests = adults + children + babies;
+
+    var party = children + babies > 0 ? "Family"
+              : guests === 1 ? "Solo" : guests === 2 ? "Couple" : "Group";
+    var stayType = week > 0 && weekend > 0 ? "Mixed"
+                 : week > 0 ? "Weekday only"
+                 : weekend > 0 ? "Weekend only" : "No overnight stay";
+
+    var adr = Math.max(0, num("adr", 100));
+    var month = arrival.getMonth() + 1;
+    var pick = function (id) { return document.getElementById(id).value; };
+
+    return {
+      lead_time: Math.max(0, Math.round(num("lead_time", 90))),
+      arrival_month_num: month,
+      arrival_date_week_number: isoWeek(arrival),
+      stays_in_weekend_nights: weekend,
+      stays_in_week_nights: week,
+      total_nights: nights,
+      adults: adults, children: children, babies: babies,
+      total_guests: guests,
+      adr: adr,
+      booking_value: Math.round(adr * nights * 100) / 100,
+      previous_cancellations: Math.max(0, Math.round(num("previous_cancellations", 0))),
+      previous_bookings_not_canceled: Math.max(0, Math.round(num("previous_bookings_not_canceled", 0))),
+      total_of_special_requests: Math.max(0, Math.round(num("total_of_special_requests", 0))),
+      is_repeated_guest: el.is_repeated_guest.checked ? 1 : 0,
+      hotel: pick("hotel"), meal: pick("meal"), country: pick("country"),
+      market_segment: pick("market_segment"),
+      distribution_channel: pick("distribution_channel"),
+      reserved_room_type: pick("reserved_room_type"),
+      deposit_type: pick("deposit_type"),
+      customer_type: pick("customer_type"),
+      season: SEASON[month],
+      arrival_dow: DAYS[arrival.getDay()],
+      party_type: party, stay_type: stayType,
+      has_agent: el.has_agent.checked ? "True" : "False",
+      has_company: el.has_company.checked ? "True" : "False",
+      _guests: guests, _arrival: arrival, _nights: nights
+    };
+  }
+
+  // --- The model itself: scaler, one-hot, dot product --------------------
+  function score(row) {
+    var z = M.intercept, parts = [];
+    NUM.forEach(function (s) {
+      var c = s.coef * ((row[s.name] - s.mean) / s.scale);
+      z += c;
+      parts.push({ key: s.name, value: row[s.name], contrib: c });
+    });
+    Object.keys(CAT).forEach(function (col) {
+      var spec = CAT[col], v = String(row[col]), c = 0;
+      if (v === "__infrequent__") {
+        c = spec.infrequent || 0;
+        v = "Other";
+      } else if (Object.prototype.hasOwnProperty.call(spec.levels, v)) {
+        c = spec.levels[v];
+      } else if (spec.folded.indexOf(v) >= 0 && spec.infrequent !== null) {
+        c = spec.infrequent;
+      }
+      z += c;
+      parts.push({ key: col, value: v, contrib: c });
+    });
+    return { p: 1 / (1 + Math.exp(-z)), logit: z, parts: parts };
+  }
+
+  // --- Render -------------------------------------------------------------
+  var BANDS = M.risk_bands;
+  var BAND_VAR = { Low: "--band-low", Moderate: "--band-moderate",
+                   Elevated: "--band-elevated", High: "--band-high" };
+  var base = M.meta.test_base_rate || 0.387;
+
+  function render() {
+    var row = readForm();
+    var out = score(row);
+    var pct = out.p * 100;
+
+    var band = "High";
+    for (var i = 0; i < BANDS.length; i++) {
+      if (out.p < BANDS[i][0]) { band = BANDS[i][1]; break; }
+    }
+    document.querySelector(".result-card").style.setProperty(
+      "--band-color", "var(" + BAND_VAR[band] + ")");
+
+    document.getElementById("value").textContent = pct.toFixed(1);
+    document.getElementById("band").textContent = band + " risk";
+    document.getElementById("fill").style.width = Math.min(100, pct) + "%";
+    document.getElementById("basemark").style.left = (base * 100) + "%";
+
+    var ratio = out.p / base;
+    document.getElementById("compare").innerHTML =
+      "<b>" + ratio.toFixed(2) + "&times;</b> the " + (base * 100).toFixed(1) +
+      "% base rate for the held-out period" +
+      (ratio >= 1 ? " &mdash; above average risk." : " &mdash; below average risk.");
+
+    // Contributions, biggest absolute push first.
+    var shown = out.parts.filter(function (p) { return Math.abs(p.contrib) > 1e-6; })
+                         .sort(function (a, b) { return Math.abs(b.contrib) - Math.abs(a.contrib); })
+                         .slice(0, 8);
+    var max = shown.length ? Math.abs(shown[0].contrib) : 1;
+    var bars = document.getElementById("bars");
+    bars.textContent = "";
+    if (!shown.length) {
+      var none = document.createElement("p");
+      none.className = "note";
+      none.textContent = "Every input sits at its training average.";
+      bars.appendChild(none);
+    }
+    shown.forEach(function (p) {
+      var row2 = document.createElement("div");
+      row2.className = "bar-row";
+      var name = document.createElement("div");
+      name.className = "bar-name";
+      name.innerHTML = label(p.key) + " <span>" +
+        String(p.value).replace(/[<>&]/g, "") + "</span>";
+      var track = document.createElement("div");
+      track.className = "bar-track";
+      var axis = document.createElement("div");
+      axis.className = "bar-axis";
+      var fill = document.createElement("div");
+      fill.className = "bar-fill " + (p.contrib > 0 ? "up" : "down");
+      fill.style.width = (Math.abs(p.contrib) / max * 48) + "%";
+      track.appendChild(axis); track.appendChild(fill);
+      row2.appendChild(name); row2.appendChild(track);
+      bars.appendChild(row2);
+    });
+
+    var kv = document.getElementById("derived");
+    kv.textContent = "";
+    [["Nights", row.total_nights + " (" + row.stays_in_week_nights +
+      " weekday, " + row.stays_in_weekend_nights + " weekend)"],
+     ["Guests", row._guests + " — " + row.party_type],
+     ["Stay pattern", row.stay_type],
+     ["Arrival", row.arrival_dow + ", " + MONTHS[row.arrival_month_num - 1] +
+      " (week " + row.arrival_date_week_number + ", " + row.season + ")"],
+     ["Booking value", "€" + row.booking_value.toFixed(2)],
+     ["Log-odds", out.logit.toFixed(3)]
+    ].forEach(function (pair) {
+      var dt = document.createElement("dt"); dt.textContent = pair[0];
+      var dd = document.createElement("dd"); dd.textContent = pair[1];
+      kv.appendChild(dt); kv.appendChild(dd);
+    });
+  }
+
+  // --- Presets ------------------------------------------------------------
+  var PRESETS = [
+    { name: "Typical booking", apply: {} },
+    { name: "Last-minute direct", apply: {
+        lead_time: 3, market_segment: "Direct", distribution_channel: "Direct",
+        country: "GBR", total_of_special_requests: 2, has_agent: false } },
+    { name: "Far-out group", apply: {
+        lead_time: 300, market_segment: "Groups", distribution_channel: "TA/TO",
+        country: "PRT", total_of_special_requests: 0 } },
+    { name: "Non-refundable", apply: {
+        lead_time: 250, deposit_type: "Non Refund", country: "PRT",
+        market_segment: "Offline TA/TO" } },
+    { name: "Returning guest", apply: {
+        lead_time: 10, is_repeated_guest: true, previous_bookings_not_canceled: 3,
+        country: "FRA", total_of_special_requests: 1, nights: 2 } },
+    { name: "Family, resort, summer", apply: {
+        hotel: "Resort Hotel", lead_time: 120, adults: 2, children: 2,
+        nights: 7, adr: 180, country: "GBR", total_of_special_requests: 2 } }
+  ];
+
+  function applyPreset(p, button) {
+    setDefaults();
+    Object.keys(p.apply).forEach(function (k) {
+      var node = document.getElementById(k);
+      if (!node) return;
+      if (node.type === "checkbox") node.checked = !!p.apply[k];
+      else node.value = p.apply[k];
+    });
+    Array.prototype.forEach.call(
+      document.querySelectorAll(".preset"),
+      function (b) { b.setAttribute("aria-pressed", String(b === button)); });
+    render();
+  }
+
+  var holder = document.getElementById("presets");
+  PRESETS.forEach(function (p, i) {
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "preset"; b.textContent = p.name;
+    b.setAttribute("aria-pressed", i === 0 ? "true" : "false");
+    b.addEventListener("click", function () { applyPreset(p, b); });
+    holder.appendChild(b);
+  });
+
+  // --- Wire up ------------------------------------------------------------
+  document.getElementById("form").addEventListener("input", function (e) {
+    if (e.target.id === "lead_time") {
+      document.getElementById("lead_time_out").textContent =
+        el.lead_time.value + " d";
+    }
+    // Editing anything by hand means no preset is active any more.
+    Array.prototype.forEach.call(
+      document.querySelectorAll(".preset"),
+      function (b) { b.setAttribute("aria-pressed", "false"); });
+    render();
+  });
+
+  var meta = M.meta;
+  var meanPred = meta.mean_predicted || 0.336;
+  document.getElementById("meanpred").textContent = (meanPred * 100).toFixed(1);
+  document.getElementById("testbase").textContent = (base * 100).toFixed(1);
+  // Stated from the model's own numbers so retraining cannot leave the prose
+  // claiming a gap the model no longer has.
+  document.getElementById("gap").textContent =
+    Math.abs(base - meanPred) * 100 < 1
+      ? (Math.abs(base - meanPred) * 100).toFixed(1)
+      : Math.round(Math.abs(base - meanPred) * 100);
+  document.getElementById("meta-trained").textContent =
+    "Trained on " + (meta.n_train || 0).toLocaleString() +
+    " arrivals before " + (meta.test_from || "2017-01-01");
+  document.getElementById("meta-perf").textContent =
+    "ROC-AUC " + (meta.roc_auc || 0).toFixed(3) +
+    " / Brier " + (meta.brier || 0).toFixed(4) +
+    " on " + (meta.n_test || 0).toLocaleString() + " held-out";
+
+  setDefaults();
+  document.getElementById("lead_time_out").textContent = el.lead_time.value + " d";
+  render();
+})();
+</script>
