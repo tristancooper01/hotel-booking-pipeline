@@ -1,0 +1,8 @@
+# Normalise line endings in the repository so a Windows checkout and the
+# Linux CI runner do not produce spurious whole-file diffs.
+* text=auto eol=lf
+
+*.png binary
+*.parquet binary
+*.db binary
+*.joblib binary

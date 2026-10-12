@@ -1,0 +1,13 @@
+# Core pipeline
+pandas>=2.0
+numpy>=1.24
+pyarrow>=12.0          # Parquet staging layer
+matplotlib>=3.7        # report figures
+
+# Model stage (python run_pipeline.py --stage model)
+scikit-learn>=1.3
+joblib>=1.3
+
+# Tests run on stdlib unittest; pytest is optional and only adds nicer output.
+# python -m unittest discover -s tests
+pytest>=7.0

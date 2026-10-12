@@ -1,0 +1,24 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Data artifacts are reproducible - keep the tree, not the contents.
+data/raw/*
+data/staging/*
+data/warehouse/*
+!data/**/.gitkeep
+
+logs/*
+!logs/.gitkeep
+
+# Generated reports are reproducible from the pipeline. The HTML embeds ~2MB
+# of base64 chart data and would churn on every run, so it stays out; the PNG
+# figures are committed so the README shows real output without a clone-and-run.
+reports/*.md
+reports/*.html
+reports/*.json
+reports/tables/*.csv
+!reports/figures/*.png
