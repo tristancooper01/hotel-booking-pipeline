@@ -31,6 +31,7 @@ class Paths:
     figures: Path = field(init=False)
     logs: Path = field(init=False)
     sql: Path = field(init=False)
+    docs: Path = field(init=False)   # the GitHub Pages site
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "raw", self.root / "data" / "raw")
@@ -40,6 +41,7 @@ class Paths:
         object.__setattr__(self, "figures", self.root / "reports" / "figures")
         object.__setattr__(self, "logs", self.root / "logs")
         object.__setattr__(self, "sql", self.root / "sql")
+        object.__setattr__(self, "docs", self.root / "docs")
 
     def ensure(self) -> None:
         for p in (self.raw, self.staging, self.warehouse,

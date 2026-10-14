@@ -7,6 +7,7 @@
     python run_pipeline.py --stage report  # re-render from the existing warehouse
     python run_pipeline.py --with-model    # also train the cancellation model
     python run_pipeline.py --stage model   # train only, from the existing staging
+    python run_pipeline.py --stage docs    # refresh the GitHub Pages site
     python run_pipeline.py --drop-duplicates
     python run_pipeline.py --query "SELECT * FROM v_monthly_performance LIMIT 5"
 """
@@ -42,7 +43,7 @@ def main(argv: list[str] | None = None) -> int:
                              "minutes; see predict.py to score bookings)")
     parser.add_argument("--stage", choices=["all", "extract", "transform",
                                             "load", "analyze", "model",
-                                            "report"],
+                                            "report", "docs"],
                         default="all",
                         help="run one stage against existing artifacts "
                              "(default: all)")
@@ -127,6 +128,9 @@ def _run_single_stage(stage: str, cfg, force_download: bool) -> int:
         require(cfg.paths.database, "load")
         results, insights = analyze_stage.analyze(cfg)
         report_stage.report(results, insights, cfg)
+    elif stage == "docs":
+        from hotel_pipeline.docs_site import build_docs
+        build_docs(cfg)
 
     print(f"Stage '{stage}' complete.")
     return 0

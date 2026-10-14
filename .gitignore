@@ -19,6 +19,7 @@ logs/*
 # figures are committed so the README shows real output without a clone-and-run.
 reports/*.md
 reports/*.html
+# docs/ is the published GitHub Pages site and IS tracked - see docs_site.py
 reports/*.json
 reports/tables/*.csv
 !reports/figures/*.png
