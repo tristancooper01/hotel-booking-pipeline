@@ -4,6 +4,9 @@ An end-to-end data pipeline over the **Hotel Booking Demand** dataset (Antonio,
 Almeida & Nunes, 2019): ~119,000 real bookings from a city hotel and a resort
 hotel in Portugal, July 2015 – August 2017.
 
+**[Try the risk scorer](https://tristancooper01.github.io/hotel-booking-pipeline/)**
+ · **[Read the analysis](https://tristancooper01.github.io/hotel-booking-pipeline/report.html)**
+
 It downloads the source, validates it, cleans it, engineers analytical features,
 loads a star schema into SQLite, runs a library of SQL analyses, trains a
 cancellation-risk model, and writes an illustrated report — in one command,
@@ -344,6 +347,12 @@ proxy.
 python run_pipeline.py --stage model     # trains, exports, builds the app
 start reports/risk_app.html              # macOS/Linux: open
 ```
+
+The same page is published at
+[tristancooper01.github.io/hotel-booking-pipeline](https://tristancooper01.github.io/hotel-booking-pipeline/).
+`--stage docs` refreshes the published copies in `docs/` from the generated
+HTML; the nav linking the two pages is injected at that point rather than baked
+into the templates, so the files in `reports/` stay standalone.
 
 ## Adding an analysis
 
